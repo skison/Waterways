@@ -7,6 +7,10 @@ const SystemMapRenderer = preload("./system_map_renderer.tscn")
 const FilterRenderer = preload("./filter_renderer.tscn")
 const RiverManager = preload("./river_manager.gd")
 
+const WATER_SYSTEM_MAP_FILE_NAME := "water_system_map.res"
+
+@export_dir var water_system_resource_save_directory: String
+
 var system_map : ImageTexture = null: set = set_system_map
 var system_bake_resolution := 2
 var system_group_name := "waterways_system"
@@ -99,6 +103,10 @@ func _get_property_list() -> Array:
 
 
 func generate_system_maps() -> void:
+	if (water_system_resource_save_directory.is_empty()):
+		printerr("Invalid water system resource save directory")
+		return
+	
 	var rivers: Array[RiverManager]
 	
 	for child in get_children():
@@ -126,7 +134,18 @@ func generate_system_maps() -> void:
 	var filter_renderer = FilterRenderer.instantiate()
 	add_child(filter_renderer)
 	
-	system_map = await filter_renderer.apply_combine(flow_map, flow_map, height_map) as ImageTexture
+	# Save image as a file and make sure it is loaded in fully
+	var system_map_img := (
+		await filter_renderer.apply_combine(flow_map, flow_map, height_map) as ImageTexture)
+	
+	if is_instance_valid(self.system_map):
+		self.system_map.set_image(system_map_img.get_image())
+	else:
+		self.system_map = system_map_img
+	
+	var system_map_filepath := water_system_resource_save_directory + "/" + WATER_SYSTEM_MAP_FILE_NAME
+	self.system_map.resource_path = system_map_filepath
+	ResourceSaver.save(self.system_map, system_map_filepath, ResourceSaver.FLAG_COMPRESS)
 	
 	remove_child(filter_renderer)
 	

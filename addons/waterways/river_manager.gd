@@ -78,6 +78,10 @@ const DEFAULT_PARAMETERS = {
 	lod_lod0_distance = 50.0,
 }
 
+const RIVER_FLOWMAP_FILE_NAME := "river_flowmap.res"
+const RIVER_DISTMAP_FILE_NAME := "river_distmap.res"
+
+@export_dir var river_resource_save_directory: String
 
 # Shape Properties
 var shape_step_length_divs : int = 1: set = set_step_length_divs
@@ -592,8 +596,8 @@ func set_custom_shader(shader : Shader) -> void:
 				shader.code = selected_shader.code
 	
 	if shader != null:
-		print("shader != null - set shader type to custom")
-		print(shader)
+		#print("shader != null - set shader type to custom")
+		#print(shader)
 		set_shader_type(SHADER_TYPES.CUSTOM)
 	else:
 		set_shader_type(SHADER_TYPES.WATER)
@@ -615,6 +619,9 @@ func _generate_river() -> void:
 
 
 func _generate_flowmap(flowmap_resolution : float) -> void:
+	if (river_resource_save_directory.is_empty()):
+		printerr("Invalid river resource save directory")
+		return
 	
 	var image := Image.create(flowmap_resolution, flowmap_resolution, true, Image.FORMAT_RGB8)
 	image.fill(Color(0.0, 0.0, 0.0))
@@ -654,7 +661,7 @@ func _generate_flowmap(flowmap_resolution : float) -> void:
 	self.add_child(renderer_instance)
 
 	var flow_pressure_blur_amount = 0.04 / float(_uv2_sides) * flowmap_resolution
-	var dilate_amount = baking_dilate / float(_uv2_sides) 
+	var dilate_amount = baking_dilate / float(_uv2_sides)
 	var flowmap_blur_amount = baking_flowmap_blur / float(_uv2_sides) * flowmap_resolution
 	var foam_offset_amount = baking_foam_offset / float(_uv2_sides)
 	var foam_blur_amount = baking_foam_blur / float(_uv2_sides) * flowmap_resolution
@@ -683,8 +690,26 @@ func _generate_flowmap(flowmap_resolution : float) -> void:
 	var flow_foam_noise_result = flow_foam_noise_img.get_image().get_region(Rect2(margin, margin, flowmap_resolution, flowmap_resolution))
 	var dist_pressure_result = dist_pressure_img.get_image().get_region(Rect2(margin, margin, flowmap_resolution, flowmap_resolution))
 	
-	flow_foam_noise = flow_foam_noise_img
-	dist_pressure = dist_pressure_img
+	# Save images as files and make sure they are loaded in fully
+	if is_instance_valid(flow_foam_noise):
+		(flow_foam_noise as ImageTexture).set_image(
+			(flow_foam_noise_img as ImageTexture).get_image())
+	else:
+		flow_foam_noise = flow_foam_noise_img
+	
+	if is_instance_valid(dist_pressure):
+		(dist_pressure as ImageTexture).set_image(
+			(dist_pressure_img as ImageTexture).get_image())
+	else:
+		dist_pressure = dist_pressure_img
+	
+	var flowmap_filepath := river_resource_save_directory + "/" + RIVER_FLOWMAP_FILE_NAME
+	flow_foam_noise.resource_path = flowmap_filepath
+	ResourceSaver.save(flow_foam_noise, flowmap_filepath, ResourceSaver.FLAG_COMPRESS)
+	
+	var distmap_filepath := river_resource_save_directory + "/" + RIVER_DISTMAP_FILE_NAME
+	dist_pressure.resource_path = distmap_filepath
+	ResourceSaver.save(dist_pressure, distmap_filepath, ResourceSaver.FLAG_COMPRESS)
 	
 	set_materials("i_flowmap", flow_foam_noise)
 	set_materials("i_distmap", dist_pressure)
